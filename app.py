@@ -1,3 +1,4 @@
+
 import os
 import streamlit as st
 from io import BytesIO
@@ -11,7 +12,6 @@ from database import (
     init_db, create_conversation, get_conversations,
     rename_conversation, save_message, load_messages, delete_conversation
 )
-
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
@@ -201,9 +201,11 @@ with st.sidebar:
 # ---- MAIN CHAT AREA ----
 st.title("🤖 Byte - Your Coding Mentor")
 
+# Render the loaded conversation history in the main chat area.
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
+        st.code(msg["content"], language=None)
 
 user_input = st.chat_input("Ask Byte something...")
 
@@ -219,6 +221,7 @@ if user_input:
     save_message(conv_id, "user", user_input)
     with st.chat_message("user"):
         st.write(user_input)
+        st.code(user_input, language=None)
 
     try:
         response = st.session_state.chat.send_message(user_input)
@@ -230,3 +233,4 @@ if user_input:
     save_message(conv_id, "assistant", bot_reply)
     with st.chat_message("assistant"):
         st.write(bot_reply)
+        st.code(bot_reply, language=None)
