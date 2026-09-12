@@ -68,26 +68,56 @@ with st.sidebar:
 
     st.divider()
 
+       # Track which conversation (if any) is currently being renamed
+    if "editing_conv_id" not in st.session_state:
+        st.session_state.editing_conv_id = None
+
     conversations = get_conversations()
     for conv in conversations:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            label = conv["title"]
-            if conv["id"] == st.session_state.current_conversation_id:
-                label = f"**{label}**"  # bold the active one
-            if st.button(label, key=f"conv_{conv['id']}", use_container_width=True):
-                load_conversation(conv["id"])
-                st.rerun()
-        with col2:
-           if st.button("X", key=f"del_{conv['id']}"):
-                delete_conversation(conv["id"])
+        is_editing = st.session_state.editing_conv_id == conv["id"]
+
+        if is_editing:
+            # Show a text input + save/cancel buttons instead of the normal row
+            new_title = st.text_input(
+                "Rename chat",
+                value=conv["title"],
+                key=f"rename_input_{conv['id']}",
+                label_visibility="collapsed"
+            )
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Save", key=f"save_{conv['id']}", use_container_width=True):
+                    rename_conversation(conv["id"], new_title.strip() or "Untitled")
+                    st.session_state.editing_conv_id = None
+                    st.rerun()
+            with col2:
+                if st.button("Cancel", key=f"cancel_{conv['id']}", use_container_width=True):
+                    st.session_state.editing_conv_id = None
+                    st.rerun()
+        else:
+            # Normal row: chat button, rename button, delete button
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                label = conv["title"]
                 if conv["id"] == st.session_state.current_conversation_id:
-                    remaining = get_conversations()
-                    if remaining:
-                        load_conversation(remaining[0]["id"])
-                    else:
-                        load_conversation(create_conversation())
-                st.rerun()
+                    label = f"**{label}**"
+                if st.button(label, key=f"conv_{conv['id']}", use_container_width=True):
+                    load_conversation(conv["id"])
+                    st.rerun()
+            with col2:
+                if st.button("Edit", key=f"edit_{conv['id']}"):
+                    st.session_state.editing_conv_id = conv["id"]
+                    st.rerun()
+            with col3:
+                if st.button("X", key=f"del_{conv['id']}"):
+                    delete_conversation(conv["id"])
+                    if conv["id"] == st.session_state.current_conversation_id:
+                        remaining = get_conversations()
+                        if remaining:
+                            load_conversation(remaining[0]["id"])
+                        else:
+                            load_conversation(create_conversation())
+                    st.rerun()
 
 # ---- MAIN CHAT AREA ----
 st.title("🤖 Byte - Your Coding Mentor")
