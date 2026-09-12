@@ -1,5 +1,9 @@
 import os
 import streamlit as st
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -68,7 +72,82 @@ with st.sidebar:
 
     st.divider()
 
-       # Track which conversation (if any) is currently being renamed
+    # Export current conversation as a text file
+    if st.session_state.messages:
+        export_lines = []
+        for msg in st.session_state.messages:
+            speaker = "You" if msg["role"] == "user" else "Byte"
+            export_lines.append(f"{speaker}: {msg['content']}")
+        export_text = "\n\n".join(export_lines)
+
+        st.download_button(
+            label="Export chat (.txt)",
+            data=export_text,
+            file_name="chat_export.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+
+        def generate_pdf(messages):
+            """Build a PDF transcript in memory and return its bytes."""
+            buffer = BytesIO()
+            doc = canvas.Canvas(buffer, pagesize=letter)
+            width, height = letter
+
+            x_margin = 0.75 * inch
+            y = height - 0.75 * inch
+            line_height = 16
+
+            doc.setFont("Helvetica-Bold", 14)
+            doc.drawString(x_margin, y, "Chat Export - Byte")
+            y -= line_height * 2
+
+            doc.setFont("Helvetica", 11)
+            for msg in messages:
+                speaker = "You" if msg["role"] == "user" else "Byte"
+                full_text = f"{speaker}: {msg['content']}"
+
+                # First split on real newlines (paragraph breaks), THEN word-wrap each piece
+                paragraphs = full_text.split("\n")
+                wrapped_lines = []
+                for paragraph in paragraphs:
+                    if paragraph.strip() == "":
+                        wrapped_lines.append("")  # preserve blank lines between paragraphs
+                        continue
+                    words = paragraph.split(" ")
+                    current_line = ""
+                    for word in words:
+                        if len(current_line) + len(word) + 1 <= 90:
+                            current_line += (word + " ")
+                        else:
+                            wrapped_lines.append(current_line)
+                            current_line = word + " "
+                    wrapped_lines.append(current_line)
+
+                for line in wrapped_lines:
+                    if y < 0.75 * inch:  # start a new page if we run out of room
+                        doc.showPage()
+                        doc.setFont("Helvetica", 11)
+                        y = height - 0.75 * inch
+                    doc.drawString(x_margin, y, line)
+                    y -= line_height
+
+                y -= line_height * 0.5  # extra spacing between messages
+
+            doc.save()
+            buffer.seek(0)
+            return buffer
+
+        pdf_buffer = generate_pdf(st.session_state.messages)
+        st.download_button(
+            label="Export chat (.pdf)",
+            data=pdf_buffer,
+            file_name="chat_export.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+
+    # Track which conversation (if any) is currently being renamed
     if "editing_conv_id" not in st.session_state:
         st.session_state.editing_conv_id = None
 
