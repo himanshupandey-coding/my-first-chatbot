@@ -4,7 +4,7 @@ A personal AI chatbot built with Google's Gemini API, featuring persistent conve
 
 ## Live Demo
 
-*(Add your deployed link here once live, e.g. https://byte-chatbot.streamlit.app)*
+[my-first-chatbot-x.streamlit.app](https://my-first-chatbot-x.streamlit.app)
 
 ## Features
 
