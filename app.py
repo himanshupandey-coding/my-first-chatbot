@@ -1,4 +1,5 @@
-
+import json
+import streamlit.components.v1 as components
 import os
 import streamlit as st
 from io import BytesIO
@@ -12,6 +13,24 @@ from database import (
     init_db, create_conversation, get_conversations,
     rename_conversation, save_message, load_messages, delete_conversation
 )
+
+def copy_button(text, button_id):
+    """Render a small button that copies the given text to the clipboard."""
+    escaped_text = json.dumps(text)
+    html_code = f"""
+    <button id="copy-btn-{button_id}"
+        style="font-size:12px; padding:3px 10px; cursor:pointer;
+               border-radius:6px; border:1px solid #ccc; background:#f0f0f2;">
+        Copy
+    </button>
+    <script>
+        document.getElementById("copy-btn-{button_id}").addEventListener("click", function() {{
+            navigator.clipboard.writeText({escaped_text});
+        }});
+    </script>
+    """
+    components.html(html_code, height=35)
+
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
@@ -23,7 +42,18 @@ if not api_key:
     st.error("GEMINI_API_KEY not found. Check your .env file.")
     st.stop()
 
-SYSTEM_INSTRUCTION = "You are a witty, slightly sarcastic coding mentor named Byte. Keep answers short and add a joke when it fits."
+PERSONALITIES = {
+    "Sarcastic Mentor (default)": "You are a witty, slightly sarcastic coding mentor named Byte. Keep answers short and add a joke when it fits.",
+    "Strict Professor": "You are a strict, no-nonsense computer science professor named Byte. Be precise, formal, and focus on correctness over friendliness.",
+    "Chill Friend": "You are a laid-back, encouraging friend named Byte who happens to know a lot about coding. Keep things casual and supportive.",
+    "Motivational Coach": "You are an energetic, motivational coach named Byte who helps people push through coding struggles with hype and encouragement.",
+}
+if "selected_personality" not in st.session_state:
+    st.session_state.selected_personality = list(PERSONALITIES.keys())[0]
+
+
+# Default system instruction used when creating the Gemini chat session.
+SYSTEM_INSTRUCTION = PERSONALITIES["Sarcastic Mentor (default)"]
 
 # Create the Gemini client once per session (doesn't depend on which conversation is open)
 if "client" not in st.session_state:
@@ -50,20 +80,32 @@ def load_conversation(conversation_id):
         for msg in messages
     ]
 
+    instruction = PERSONALITIES[st.session_state.selected_personality]
+
     st.session_state.chat = st.session_state.client.chats.create(
         model="gemini-3.6-flash",
         history=formatted_history,
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION)
+        config=types.GenerateContentConfig(system_instruction=instruction)
     )
     st.session_state.messages = messages
+    st.session_state.active_personality = st.session_state.selected_personality
 
 # Build the active chat session if we haven't yet (first run, or after switching conversations)
 if "chat" not in st.session_state:
     load_conversation(st.session_state.current_conversation_id)
 
+# If the user picked a different personality than what's currently active, rebuild the session
+elif st.session_state.get("active_personality") != st.session_state.selected_personality:
+    load_conversation(st.session_state.current_conversation_id)
 # ---- SIDEBAR ----
 with st.sidebar:
     st.header("💬 Conversations")
+    selected_personality = st.selectbox(
+        "Byte's personality",
+        options=list(PERSONALITIES.keys()),
+        key="selected_personality"
+    )
+    SYSTEM_INSTRUCTION = PERSONALITIES[selected_personality]
 
     if st.button("➕ New Chat", use_container_width=True):
         new_id = create_conversation()
@@ -205,7 +247,7 @@ st.title("🤖 Byte - Your Coding Mentor")
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
-        st.code(msg["content"], language=None)
+        copy_button(msg["content"], button_id=id(msg))
 
 user_input = st.chat_input("Ask Byte something...")
 
@@ -221,7 +263,7 @@ if user_input:
     save_message(conv_id, "user", user_input)
     with st.chat_message("user"):
         st.write(user_input)
-        st.code(user_input, language=None)
+        copy_button(user_input, button_id="new_user_msg")
 
     try:
         response = st.session_state.chat.send_message(user_input)
@@ -233,4 +275,4 @@ if user_input:
     save_message(conv_id, "assistant", bot_reply)
     with st.chat_message("assistant"):
         st.write(bot_reply)
-        st.code(bot_reply, language=None)
+        copy_button(bot_reply, button_id="new_bot_reply")
